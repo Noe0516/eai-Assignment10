@@ -1,0 +1,12 @@
+Optimal reference return: -0.5322
+Threshold (80%): -0.4257
+
+Method, EpisodesTo80, FinalAvgLast200, Parameters
+Discretized Q-learning, None, -1.1702, 1600
+Tile-coded linear Q-learning, None, -1.1116, 800
+DQN, None, -0.8354, 4740
+
+DQN tail rewards: full=-0.8354, no_replay=-1.3060, no_target=-1.2932
+6D visited bins: 3438/1000000 (0.34%)
+6D discretized table size is 4,000,000 Q-values. Only 0.34% of bins were visited in training, while DQN generalized over the full 6D state with far fewer parameters.
+Removing experience replay harmed stability more than removing the target network, which matches the deadly triad intuition (function approximation + bootstrapping + off-policy updates).

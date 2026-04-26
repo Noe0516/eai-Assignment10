@@ -1,0 +1,102 @@
+
+#Exercise 2: Continuous Warehouse Environment
+#A continuous-state warehouse floor for function approximation experiments (Section 7.4.3: Warehouse Upgrade: Continuous Floor). The robot has state  with 4 discrete actions (N/S/E/W). The hazard is at the center of the floor, directly in the path from start to goal.
+
+import numpy as np
+import matplotlib.pyplot as plt
+from continuous_warehouse import ContinuousWarehouse
+
+class TileCodedAgent:
+    """Linear Q-learning with tile coding over (x, y)."""
+    def __init__(self, n_tilings=8, tiles_per_dim=4, n_actions=4,
+                 alpha=0.05, gamma=0.99):
+        self.n_tilings = n_tilings
+        self.tiles_per_dim = tiles_per_dim
+        self.n_actions = n_actions
+        self.alpha = alpha / n_tilings
+        self.gamma = gamma
+        # Extra tile per dim for offset tilings (boundary handling)
+        self.ext = tiles_per_dim + 1
+        self.tiles_per_tiling = self.ext ** 2
+        self.n_features = n_tilings * self.tiles_per_tiling
+        self.W = np.zeros((n_actions, self.n_features))
+        self.tile_width = 4.0 / tiles_per_dim
+        self.offsets = np.array([
+            [k * self.tile_width / n_tilings,
+             k * self.tile_width / n_tilings]
+            for k in range(n_tilings)
+        ])
+    def get_features(self, state):
+        """Binary feature vector from tile coding of (x, y)."""
+        phi = np.zeros(self.n_features)
+        x, y = state[0], state[1]
+        for k in range(self.n_tilings):
+            sx = x + self.offsets[k, 0]
+            sy = y + self.offsets[k, 1]
+            bx = int(sx / self.tile_width)
+            by = int(sy / self.tile_width)
+            bx = max(0, min(bx, self.ext - 1))
+            by = max(0, min(by, self.ext - 1))
+            idx = k * self.tiles_per_tiling + bx * self.ext + by
+            phi[idx] = 1.0
+        return phi
+    def q_values(self, state):
+        phi = self.get_features(state)
+        return self.W @ phi
+    def select_action(self, state, epsilon):
+        if np.random.random() < epsilon:
+            return np.random.randint(self.n_actions)
+        return int(np.argmax(self.q_values(state)))
+    def update(self, state, action, reward, next_state, done):
+        phi = self.get_features(state)
+        q_sa = self.W[action] @ phi
+        if done:
+            target = reward
+        else:
+            target = reward + self.gamma * np.max(
+                self.q_values(next_state))
+        self.W[action] += self.alpha * (target - q_sa) * phi
+
+        #Train the Agent
+        def train(n_episodes=1000, epsilon_start=1.0, epsilon_decay=0.995,
+          epsilon_min=0.01, seed=42):
+    np.random.seed(seed)
+    env = ContinuousWarehouse()
+    agent = TileCodedAgent()
+    epsilon = epsilon_start
+    rewards = []
+    for _ in range(n_episodes):
+        state = env.reset()
+        done = False
+        total_reward = 0
+        steps = 0
+        while not done and steps < 200:
+            action = agent.select_action(state, epsilon)
+            next_state, reward, done = env.step(action)
+            agent.update(state, action, reward, next_state, done)
+            state = next_state
+            total_reward += reward
+            steps += 1
+        epsilon = max(epsilon_min, epsilon * epsilon_decay)
+        rewards.append(total_reward)
+    return agent, rewards
+agent, rewards = train()
+
+#Learning Curve
+def rolling_avg(data, window=100):
+    return np.convolve(data, np.ones(window)/window, mode='valid')
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(rolling_avg(rewards), alpha=0.8)
+ax.set_xlabel('Episode')
+ax.set_ylabel('Reward (rolling avg)')
+ax.set_title('Tile-Coded Linear Q-Learning')
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig('tile_coded_curve.svg', bbox_inches='tight')
+plt.show()
+
+#Parameter Count 
+print(f"Tile-coded parameters: {agent.W.size}")
+print(f"  {agent.n_tilings} tilings x "
+      f"{agent.tiles_per_tiling} tiles/tiling x "
+      f"{agent.n_actions} actions")
